@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skin Cancer Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f0f;
+    --surface: #141717;
+    --surface2: #1a1e1e;
+    --border: #252a2a;
+    --border2: #2e3535;
+    --text: #e8eaea;
+    --text-muted: #6b7575;
+    --text-dim: #3d4444;
+    --accent: #00c896;
+    --accent-dim: rgba(0,200,150,0.1);
+    --red: #ff4d4d;
+    --red-dim: rgba(255,77,77,0.1);
+    --red-border: rgba(255,77,77,0.25);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+  }
+
+  .container { position: relative; z-index: 1; width: 100%; max-width: 640px; }
+
+  .header { margin-bottom: 2.5rem; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--red-dim); border: 1px solid var(--red-border);
+    border-radius: 4px; padding: 4px 10px;
+    font-size: 11px; font-weight: 600; color: var(--red);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 1rem; font-family: 'DM Mono', monospace;
+  }
+
+  .badge-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--red); animation: pulse 2s ease infinite;
+  }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  h1 {
+    font-size: clamp(28px, 5vw, 36px); font-weight: 700;
+    color: var(--text); line-height: 1.1;
+    letter-spacing: -0.03em; margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    font-size: 13px; color: var(--text-muted);
+    font-family: 'DM Mono', monospace; letter-spacing: 0.02em;
+  }
+
+  .tabs {
+    display: flex; gap: 4px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px; margin-bottom: 1.5rem;
+  }
+
+  .tab {
+    flex: 1; padding: 9px; background: transparent; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
+    color: var(--text-muted); transition: all 0.2s; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+
+  .tab.active { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
+  .tab:not(.active):hover { color: var(--text); }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border2); border-radius: 12px;
+    padding: 3rem 1.5rem; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: var(--surface);
+  }
+
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: var(--accent-dim); }
+
+  .drop-icon { font-size: 36px; margin-bottom: 0.75rem; opacity: 0.7; }
+  .drop-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .drop-sub { font-size: 12px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+
+  .img-wrap { position: relative; border-radius: 12px; overflow: hidden; }
+
+  .img-wrap img {
+    width: 100%; max-height: 380px; object-fit: cover; display: block;
+    border: 1px solid var(--border); border-radius: 12px;
+  }
+
+  .img-remove {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(0,0,0,0.7); color: white;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px; padding: 5px 12px; cursor: pointer;
+    font-size: 12px; font-family: inherit; font-weight: 500; transition: background 0.2s;
+  }
+
+  .img-remove:hover { background: rgba(0,0,0,0.9); }
+
+  .cam-idle {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 2.5rem; text-align: center;
+  }
+
+  .cam-icon { font-size: 44px; margin-bottom: 0.75rem; opacity: 0.5; }
+  .cam-text { font-size: 14px; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.6; }
+
+  .cam-wrap {
+    position: relative; border-radius: 12px;
+    overflow: hidden; background: #000; border: 1px solid var(--border);
+  }
+
+  .cam-wrap video { width: 100%; max-height: 400px; object-fit: cover; display: block; }
+
+  .cam-controls {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    padding: 2rem 1rem 1rem; display: flex; gap: 8px; justify-content: center;
+  }
+
+  .live-badge {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,77,77,0.85); border-radius: 4px; padding: 3px 10px;
+    display: flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 700; color: white;
+    letter-spacing: 0.1em; font-family: 'DM Mono', monospace;
+  }
+
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: white; animation: blink 1s ease infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  .btn {
+    padding: 11px 22px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 14px; font-weight: 600; font-family: inherit; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover:not(:disabled) { background: #cdd0d0; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--border2); }
+  .btn-ghost:hover { background: rgba(255,255,255,0.12); }
+  .btn-full { width: 100%; justify-content: center; margin-top: 1rem; }
+
+  .loading {
+    text-align: center; padding: 2.5rem; background: var(--surface);
+    border-radius: 12px; margin-top: 1rem; border: 1px solid var(--border);
+  }
+
+  .spinner {
+    display: inline-block; width: 32px; height: 32px;
+    border: 3px solid var(--border2); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 1rem;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .loading-sub { font-size: 12px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+
+  .error-box {
+    margin-top: 1rem; padding: 1rem 1.25rem;
+    background: var(--red-dim); border: 1px solid var(--red-border);
+    border-radius: 10px; color: var(--red);
+    font-size: 13px; display: flex; gap: 8px; align-items: flex-start;
+  }
+
+  .result-card {
+    margin-top: 1.5rem; border-radius: 14px; padding: 1.5rem;
+    animation: slideUp 0.35s ease; border: 1px solid;
+  }
+
+  @keyframes slideUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+  .result-head {
+    display: flex; justify-content: space-between;
+    align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 1.25rem;
+  }
+
+  .result-code {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6; margin-bottom: 4px;
+  }
+
+  .result-name { font-size: 20px; font-weight: 700; line-height: 1.2; }
+
+  .risk-badge {
+    border-radius: 4px; padding: 4px 10px; font-size: 11px; font-weight: 700;
+    font-family: 'DM Mono', monospace; letter-spacing: 0.05em;
+    text-transform: uppercase; white-space: nowrap;
+  }
+
+  .confidence-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+
+  .conf-bar-wrap { flex: 1; background: rgba(0,0,0,0.3); border-radius: 999px; height: 4px; overflow: hidden; }
+  .conf-bar { height: 100%; border-radius: 999px; transition: width 0.7s ease; }
+  .conf-label { font-family: 'DM Mono', monospace; font-size: 11px; opacity: 0.7; white-space: nowrap; }
+
+  .divider { height: 1px; background: rgba(255,255,255,0.06); margin: 1.25rem 0; }
+  .desc-text { font-size: 14px; line-height: 1.7; opacity: 0.85; }
+
+  .advice-box { margin-top: 1rem; padding: 1rem 1.25rem; border-radius: 10px; border: 1px solid; }
+
+  .advice-title {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; font-family: 'DM Mono', monospace; margin-bottom: 8px;
+  }
+
+  .advice-text { font-size: 13px; line-height: 1.7; opacity: 0.85; }
+
+  .disclaimer {
+    margin-top: 1rem; font-size: 11px; text-align: center;
+    opacity: 0.4; font-family: 'DM Mono', monospace; line-height: 1.6;
+  }
+
+  .footer {
+    margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+
+  .footer-left, .footer-right { font-size: 11px; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+
+<div class="container">
+  <div class="header">
+    <div class="badge"><div class="badge-dot"></div>AI Screening Tool</div>
+    <h1>Skin Cancer<br>Detector</h1>
+    <div class="subtitle">EfficientNetB3 · HAM10000 · 7 lesion classes</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tab-upload" onclick="switchTab('upload')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload Image
+    </button>
+    <button class="tab" id="tab-camera" onclick="switchTab('camera')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Live Camera
+    </button>
+  </div>
+
+  <div id="panel-upload">
+    <div id="drop-zone" class="drop-zone"
+      onclick="document.getElementById('file-input').click()"
+      ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+      <div class="drop-icon">🖼</div>
+      <div class="drop-title">Drop image here or click to browse</div>
+      <div class="drop-sub">JPG · PNG · WEBP — close-up recommended</div>
+      <input id="file-input" type="file" accept="image/*" style="display:none" onchange="handleFile(this.files[0])">
+    </div>
+    <div id="img-preview" style="display:none">
+      <div class="img-wrap">
+        <img id="preview-img" src="" alt="preview">
+        <button class="img-remove" onclick="resetAll()">✕ Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-camera" style="display:none">
+    <div id="cam-idle" class="cam-idle">
+      <div class="cam-icon">📷</div>
+      <div class="cam-text">Start the camera and point it at<br>the skin lesion for detection</div>
+      <button class="btn btn-primary" onclick="startCamera()">Start Camera</button>
+    </div>
+    <div id="cam-live" style="display:none">
+      <div class="cam-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas" style="display:none"></canvas>
+        <div class="live-badge"><div class="live-dot"></div> LIVE</div>
+        <div class="cam-controls">
+          <button class="btn btn-primary" onclick="captureFrame()">📸 Capture & Analyze</button>
+          <button class="btn btn-ghost" onclick="stopCamera()">✕ Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div id="cam-captured" style="display:none">
+      <div class="img-wrap">
+        <img id="captured-img" src="" alt="captured">
+        <button class="img-remove" onclick="resetAll()">✕ Retake</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="analyze-wrap" style="display:none">
+    <button class="btn btn-primary btn-full" onclick="analyze()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Analyze Lesion
+    </button>
+  </div>
+
+  <div id="loading-box" class="loading" style="display:none">
+    <div class="spinner"></div>
+    <div class="loading-title">Analyzing lesion...</div>
+    <div class="loading-sub">Running EfficientNetB3 classification</div>
+  </div>
+
+  <div id="error-box" class="error-box" style="display:none">
+    ⚠ <span id="error-msg"></span>
+  </div>
+
+  <div id="result-box" style="display:none"></div>
+
+  <div class="footer">
+    <div class="footer-left">HAM10000 Dataset · 7 classes</div>
+    <div class="footer-right">Not a medical diagnosis</div>
+  </div>
+</div>
+
+<script>
+const CLASS_INFO = {
+  akiec: { full:"Actinic Keratoses", risk:"high", emoji:"⚠", description:"A rough, scaly patch caused by years of sun exposure. Can progress to squamous cell carcinoma if untreated.", advice:"Requires prompt medical attention. Consult a dermatologist within 1–2 weeks. Early treatment is highly effective.", urgent:true, color:"#ffd166", bg:"rgba(255,209,102,0.07)", border:"rgba(255,209,102,0.2)", barColor:"#ffd166" },
+  bcc:   { full:"Basal Cell Carcinoma", risk:"critical", emoji:"🚨", description:"The most common form of skin cancer. Rarely spreads but can cause significant local damage if left untreated.", advice:"URGENT: See a dermatologist or doctor immediately — ideally within the next few days. Very treatable when caught early.", urgent:true, color:"#ff4d4d", bg:"rgba(255,77,77,0.07)", border:"rgba(255,77,77,0.2)", barColor:"#ff4d4d" },
+  bkl:   { full:"Benign Keratosis", risk:"low", emoji:"✓", description:"A non-cancerous skin growth common with aging. Generally harmless but may resemble more serious lesions.", advice:"Appears benign (non-cancerous). Professional confirmation from a dermatologist is recommended, especially if it changes over time.", urgent:false, color:"#00c896", bg:"rgba(0,200,150,0.07)", border:"rgba(0,200,150,0.2)", barColor:"#00c896" },
+  df:    { full:"Dermatofibroma", risk:"low", emoji:"✓", description:"A common benign skin growth that is firm to the touch, usually found on the legs. Completely harmless in most cases.", advice:"Generally harmless. No urgent action needed, but if the lesion changes size, shape, or color, visit a dermatologist.", urgent:false, color:"#00c896", bg:"rgba(0,200,150,0.07)", border:"rgba(0,200,150,0.2)", barColor:"#00c896" },
+  mel:   { full:"Melanoma", risk:"critical", emoji:"🚨", description:"The most dangerous form of skin cancer. Can spread to other organs rapidly if not detected and treated early.", advice:"URGENT: Go to a doctor or emergency dermatology clinic TODAY. Melanoma is life-threatening if untreated — but curable when caught early.", urgent:true, color:"#ff4d4d", bg:"rgba(255,77,77,0.07)", border:"rgba(255,77,77,0.2)", barColor:"#ff4d4d" },
+  nv:    { full:"Melanocytic Nevi", risk:"low", emoji:"✓", description:"Common moles that are usually benign. Most are harmless, but any change in size, shape, or color should be monitored.", advice:"Appears to be a common mole — generally harmless. Visit a dermatologist if you notice any changes.", urgent:false, color:"#4fc3f7", bg:"rgba(79,195,247,0.07)", border:"rgba(79,195,247,0.2)", barColor:"#4fc3f7" },
+  vasc:  { full:"Vascular Lesions", risk:"moderate", emoji:"ℹ", description:"Skin abnormalities caused by blood vessels, including hemangiomas, port-wine stains, and spider veins.", advice:"Usually benign but vary widely. Consult a dermatologist for proper diagnosis, especially if the lesion is growing.", urgent:false, color:"#b388ff", bg:"rgba(179,136,255,0.07)", border:"rgba(179,136,255,0.2)", barColor:"#b388ff" },
+};
+
+const RISK_LABELS = { low:"Low Risk", moderate:"Moderate Risk", high:"High Risk", critical:"Critical — See Doctor" };
+const RISK_COLORS = {
+  low:      { color:"#00c896", bg:"rgba(0,200,150,0.15)" },
+  moderate: { color:"#b388ff", bg:"rgba(179,136,255,0.15)" },
+  high:     { color:"#ffd166", bg:"rgba(255,209,102,0.15)" },
+  critical: { color:"#ff4d4d", bg:"rgba(255,77,77,0.15)" }
+};
+
+let currentImage = null;
+let mediaStream = null;
+let currentMode = 'upload';
+
+function switchTab(tab) {
+  currentMode = tab;
+  document.getElementById('tab-upload').classList.toggle('active', tab === 'upload');
+  document.getElementById('tab-camera').classList.toggle('active', tab === 'camera');
+  document.getElementById('panel-upload').style.display = tab === 'upload' ? '' : 'none';
+  document.getElementById('panel-camera').style.display = tab === 'camera' ? '' : 'none';
+  resetAll();
+}
+
+function showImage(dataUrl) {
+  currentImage = dataUrl;
+  if (currentMode === 'upload') {
+    document.getElementById('drop-zone').style.display = 'none';
+    document.getElementById('preview-img').src = dataUrl;
+    document.getElementById('img-preview').style.display = '';
+  } else {
+    document.getElementById('cam-live').style.display = 'none';
+    document.getElementById('cam-idle').style.display = 'none';
+    document.getElementById('captured-img').src = dataUrl;
+    document.getElementById('cam-captured').style.display = '';
+  }
+  document.getElementById('analyze-wrap').style.display = '';
+  document.getElementById('result-box').style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
+}
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = e => showImage(e.target.result);
+  reader.readAsDataURL(file);
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragover');
+  handleFile(e.dataTransfer.files[0]);
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('dragover');
+}
+
+function handleDragLeave() {
+  document.getElementById('drop-zone').classList.remove('dragover');
+}
+
+async function startCamera() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment', width:640, height:480 } });
+    document.getElementById('video').srcObject = mediaStream;
+    document.getElementById('cam-idle').style.display = 'none';
+    document.getElementById('cam-live').style.display = '';
+  } catch {
+    showError('Camera access denied. Please allow camera permissions and try again.');
+  }
+}
+
+function stopCamera() {
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  document.getElementById('cam-live').style.display = 'none';
+  document.getElementById('cam-idle').style.display = '';
+}
+
+function captureFrame() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  stopCamera();
+  showImage(canvas.toDataURL('image/jpeg', 0.92));
+}
+
+function resetAll() {
+  currentImage = null;
+  stopCamera();
+  document.getElementById('drop-zone').style.display = '';
+  document.getElementById('img-preview').style.display = 'none';
+  document.getElementById('cam-captured').style.display = 'none';
+  document.getElementById('cam-idle').style.display = currentMode === 'camera' ? '' : 'none';
+  document.getElementById('analyze-wrap').style.display = 'none';
+  document.getElementById('result-box').style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
+  document.getElementById('loading-box').style.display = 'none';
+  document.getElementById('file-input').value = '';
+}
+
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-box').style.display = 'flex';
+}
+
+async function analyze() {
+  if (!currentImage) return;
+  document.getElementById('analyze-wrap').style.display = 'none';
+  document.getElementById('loading-box').style.display = '';
+  document.getElementById('result-box').style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
+
+  try {
+    const result = await classifyImage(currentImage);
+    document.getElementById('loading-box').style.display = 'none';
+    renderResult(result);
+  } catch(e) {
+    document.getElementById('loading-box').style.display = 'none';
+    document.getElementById('analyze-wrap').style.display = '';
+    showError('Analysis failed. Make sure backend is running at http://127.0.0.1:8000 — ' + (e.message || ''));
+  }
+}
+
+// Calls YOUR trained EfficientNetB3 model via FastAPI backend
+async function classifyImage(dataUrl) {
+  const blob = await fetch(dataUrl).then(r => r.blob());
+  const formData = new FormData();
+  formData.append('file', blob, 'image.jpg');
+
+  const res = await fetch('http://127.0.0.1:8000/predict', {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!res.ok) throw new Error('Server returned ' + res.status);
+
+  const data = await res.json();
+  return { class: data.class, confidence: data.confidence, reasoning: null };
+}
+
+function renderResult(result) {
+  const info = CLASS_INFO[result.class] || CLASS_INFO['nv'];
+  const risk = RISK_COLORS[info.risk];
+  const conf = Math.round(result.confidence * 100);
+
+  const html = `
+    <div class="result-card" style="background:${info.bg}; border-color:${info.border}">
+      <div class="result-head">
+        <div>
+          <div class="result-code" style="color:${info.color}">${result.class.toUpperCase()}</div>
+          <div class="result-name" style="color:${info.color}">${info.emoji} ${info.full}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="risk-badge" style="background:${risk.bg}; color:${risk.color}">${RISK_LABELS[info.risk]}</div>
+          <div class="confidence-row" style="margin-top:8px">
+            <div class="conf-bar-wrap">
+              <div class="conf-bar" style="width:${conf}%; background:${info.barColor}"></div>
+            </div>
+            <div class="conf-label" style="color:${info.color}">${conf}%</div>
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="desc-text">${info.description}</div>
+      <div class="advice-box" style="background:${info.urgent ? 'rgba(255,77,77,0.08)' : 'rgba(0,0,0,0.2)'}; border-color:${info.urgent ? 'rgba(255,77,77,0.2)' : info.border}">
+        <div class="advice-title" style="color:${info.urgent ? '#ff4d4d' : info.color}">
+          ${info.urgent ? '🏥 Medical Action Required' : '💡 Health Advice'}
+        </div>
+        <div class="advice-text">${info.advice}</div>
+      </div>
+      <div class="disclaimer"></div>
+    </div>
+  `;
+
+  const box = document.getElementById('result-box');
+  box.innerHTML = html;
+  box.style.display = '';
+  box.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+</script>
+</body>
+</html>
